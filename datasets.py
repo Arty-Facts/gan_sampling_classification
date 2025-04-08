@@ -1,3 +1,4 @@
+import medmnist.dataset
 import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
@@ -5,39 +6,12 @@ from medmnist import INFO
 import medmnist
 
 
-class OneHotEncoding:
-    def __init__(self, num_classes):
-        self.num_classes = num_classes
-    
-    def __call__(self, label):
-        one_hot = torch.zeros(self.num_classes)
-        one_hot[label] = 1
-        return one_hot
-    
-class CoolDataset():
-    def __init__(self, dataset, image_shape, label_shape, channels, transform, lable_transform):
-        self.dataset = dataset
-        self.image_shape = (channels, image_shape, image_shape)
-        self.label_shape = label_shape
-        self.has_labels = False
-        self.transform=transform
-        self.lable_transform=lable_transform
-
-    def __getitem__(self, index):
-        img, label = self.dataset[index]
-        return self.transform(img), self.lable_transform(label)
-    def get_label(self, index):
-        return self[index][1]
-
-    def __len__(self):
-        return len(self.dataset)
 ALL_DATASETS = ['MNIST'
                 ,'FashionMNIST'
                 ,'SVHN'
                 ,'CIFAR10'
                 ,'CIFAR100'
                 ,'PathMNIST'
-                ,'ChestMNIST'
                 ,'DermaMNIST'
                 ,'OCTMNIST'
                 ,'BloodMNIST'
@@ -49,6 +23,54 @@ ALL_DATASETS = ['MNIST'
                 ,'OrganCMNIST'
                 ,'OrganSMNIST'
                 ]
+class OneHotEncoding:
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+    
+    def __call__(self, label):
+        one_hot = torch.zeros(self.num_classes)
+        one_hot[label] = 1
+        return one_hot
+    
+def get_label(dataset):
+    if isinstance(dataset, (datasets.MNIST, datasets.FashionMNIST, datasets.CIFAR10, datasets.CIFAR100)):
+        return torch.tensor(dataset.targets) if not isinstance(dataset.targets, torch.Tensor) else dataset.targets
+    elif isinstance(dataset, datasets.SVHN):
+        return torch.tensor(dataset.labels)
+    elif isinstance(dataset, medmnist.dataset.MedMNIST):
+        return torch.tensor(dataset.labels).reshape(-1)
+    else:
+        raise ValueError(f'Invalid dataset: {dataset}')
+    
+class CoolDataset():
+    def __init__(self,name, dataset, image_shape, label_shape, channels, transform, lable_transform, class_names):
+        self.name = name
+        self.dataset = dataset
+        self.lables = get_label(dataset)
+        self.image_shape = (channels, image_shape, image_shape)
+        self.label_shape = label_shape
+        self.has_labels = False
+        self.transform=transform
+        self.lable_transform=lable_transform
+        self.data_per_class = [(self.lables == i).sum() for i in range(label_shape)]
+        self.class_names = class_names
+        self.sorted_data_per_class = sorted(zip(range(self.label_shape), self.data_per_class), key=lambda x: x[1], reverse=True)
+
+    def __getitem__(self, index):
+        img, label = self.dataset[index]
+        return self.transform(img), self.lable_transform(label)
+    
+    def get_label(self, index):
+        return self.lable_transform(self.lables[index])
+
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __repr__(self):
+        return  f"{self.name} - " + ", ".join([f"{name}:{numb}" for name, numb in self.sorted_data_per_class])
+    
+
+
 def get_dataset(dataset, data_path, **kvargs):
     if dataset == 'MNIST':
         channel = 1
@@ -96,7 +118,6 @@ def get_dataset(dataset, data_path, **kvargs):
         transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
         label_transform = OneHotEncoding(num_classes)
     elif dataset in ['PathMNIST'
-                    ,'ChestMNIST'
                     ,'DermaMNIST'
                     ,'OCTMNIST'
                     ,'BloodMNIST'
@@ -120,8 +141,8 @@ def get_dataset(dataset, data_path, **kvargs):
         label_transform = OneHotEncoding(num_classes)
     else:
         raise ValueError(f'Invalid dataset: {dataset}')
-    ds_test = CoolDataset(ds_test, im_size, num_classes, channel, transform, label_transform)
-    ds_train = CoolDataset(ds_train, im_size, num_classes, channel, transform, label_transform)
+    ds_test = CoolDataset(dataset+"_test", ds_test, im_size, num_classes, channel, transform, label_transform, class_names)
+    ds_train = CoolDataset(dataset+"_train", ds_train, im_size, num_classes, channel, transform, label_transform, class_names)
     return {
         'channel': channel,
         'im_size': im_size,
