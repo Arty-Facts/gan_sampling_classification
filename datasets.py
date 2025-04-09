@@ -17,22 +17,23 @@ def seed_everything(seed=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-ALL_DATASETS = ['MNIST'
-                ,'FashionMNIST'
-                ,'SVHN'
-                ,'CIFAR10'
-                ,'CIFAR100'
-                ,'PathMNIST'
-                ,'DermaMNIST'
-                # ,'OCTMNIST'
-                ,'BloodMNIST'
-                ,'BreastMNIST'
-                # ,'PneumoniaMNIST'
-                ,'RetinaMNIST'
-                # ,'TissueMNIST'
-                # ,'OrganAMNIST'
-                ,'OrganCMNIST'
-                # ,'OrganSMNIST'
+ALL_DATASETS = [
+                'BloodMNIST',
+                'PathMNIST',
+                'OrganCMNIST',
+                'BreastMNIST',
+                'DermaMNIST',
+                # 'OCTMNIST',
+                # 'PneumoniaMNIST',
+                'RetinaMNIST',
+                # 'TissueMNIST',
+                # 'OrganAMNIST',
+                # 'OrganSMNIST',
+                'SVHN',
+                'CIFAR10',
+                'CIFAR100',
+                'FashionMNIST',
+                'MNIST',
                 ]
 class OneHotEncoding:
     def __init__(self, num_classes):
@@ -49,7 +50,7 @@ def get_label(dataset):
     elif isinstance(dataset, datasets.SVHN):
         return torch.tensor(dataset.labels)
     elif isinstance(dataset, medmnist.dataset.MedMNIST):
-        return torch.tensor(dataset.labels).reshape(-1)
+        return torch.tensor(dataset.labels).flatten()
     else:
         raise ValueError(f'Invalid dataset: {dataset}')
 
@@ -122,7 +123,10 @@ class InfiniteClassSampler(Sampler):
                 # Random shuffle of dataset indices
                 indices = torch.randperm(len(self.dataset))
                 for i in range(0, len(indices), self.batch_size):
-                    yield indices[i:i + self.batch_size].tolist()
+                    batch = indices[i:i + self.batch_size].tolist()
+                    if len(batch) < self.batch_size:
+                        break
+                    yield batch
             else:
                 if self.batch_size > self.num_classes:
                     samples_per_class = self.batch_size // self.num_classes
@@ -134,10 +138,11 @@ class InfiniteClassSampler(Sampler):
                             else:
                                 selected = torch.randint(0, len(class_idxs), (samples_per_class,))+ sum([self.data_per_class[i] for i in range(label)])
                             batch.extend(selected.tolist())
-                        while len(batch) < self.batch_size:
-                            label = random.randint(0, self.num_classes - 1)
-                            idx = self.dataset.get_random_index_for_label(label)
-                            batch.append(idx)
+                        if len(batch) < self.batch_size:
+                            chosen_classes = random.sample(range(self.num_classes), self.batch_size - len(batch))
+                            for label in chosen_classes:
+                                idx = self.dataset.get_random_index_for_label(label)
+                                batch.append(idx)
                         random.shuffle(batch)
                         yield batch
                 else:
@@ -154,9 +159,7 @@ class InfiniteClassSampler(Sampler):
     def __len__(self):
         return 2 ** 31  # practically infinite
 
-def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none", seed=None, **kvargs):
-    if sampling_strategy not in ["none", "class_balence"]:
-        raise ValueError(f"Unsuported sampling_strategy {sampling_strategy}")
+def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None, **kvargs):
     if dataset == 'MNIST':
         channel = 1
         im_size = 28
@@ -164,8 +167,7 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         ds_train = datasets.MNIST(data_path, train=True, download=True) # no augmentation
         ds_test = datasets.MNIST(data_path, train=False, download=True)
         class_names = [str(c) for c in range(num_classes)]
-        transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x) 
         if reduce_level == 1:
             reduce_level = torch.linspace(100, 1000, num_classes).long()
     elif dataset == 'FashionMNIST':
@@ -175,8 +177,7 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         ds_train = datasets.FashionMNIST(data_path, train=True, download=True) # no augmentation
         ds_test = datasets.FashionMNIST(data_path, train=False, download=True)
         class_names = ds_train.classes
-        transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x) 
         if reduce_level == 1:
             reduce_level = torch.linspace(100, 1000, num_classes).long()
     elif dataset == 'SVHN':
@@ -186,8 +187,7 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         ds_train = datasets.SVHN(data_path, split='train', download=True)  # no augmentation
         ds_test = datasets.SVHN(data_path, split='test', download=True)
         class_names = [str(c) for c in range(num_classes)]
-        transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x) 
         if reduce_level == 1:
             reduce_level = torch.linspace(100, 1000, num_classes).long()
     elif dataset == 'CIFAR10':
@@ -197,8 +197,7 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         ds_train = datasets.CIFAR10(data_path, train=True, download=True) # no augmentation
         ds_test = datasets.CIFAR10(data_path, train=False, download=True)
         class_names = ds_train.classes
-        transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x) 
         if reduce_level == 1:
             reduce_level = torch.linspace(100, 1000, num_classes).long()
     elif dataset == 'CIFAR100':
@@ -208,8 +207,7 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         ds_train = datasets.CIFAR100(data_path, train=True, download=True) # no augmentation
         ds_test = datasets.CIFAR100(data_path, train=False, download=True)
         class_names = ds_train.classes
-        transform = lambda x: transforms.functional.to_tensor(x) * 2 -1
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x) 
         if reduce_level == 1:
             reduce_level = torch.linspace(100, 500, num_classes).long()
     elif dataset in ['PathMNIST'
@@ -229,11 +227,10 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
         im_size = kvargs.get("size", 28)
         num_classes = len(info["label"])
         DataClass = getattr(medmnist, info['python_class'])
-        ds_train = DataClass(split='train',download=True, size=im_size, root=data_path)
-        ds_test = DataClass(split='test',download=True, size=im_size, root=data_path)
+        ds_train = DataClass(split='train',download=True, size=im_size, root=data_path, target_transform=lambda x:x.item())
+        ds_test = DataClass(split='test',download=True, size=im_size, root=data_path, target_transform=lambda x:x.item())
         class_names = list(info["label"].values())
-        transform = lambda x: (transforms.functional.to_tensor(x)  - 0.5) / 0.5
-        label_transform = OneHotEncoding(num_classes)
+        transform = lambda x: transforms.functional.to_tensor(x)
         if reduce_level == 1:
             if dataset == 'PathMNIST':
                 reduce_level = torch.tensor([3000, 5000, 6000, 7000, 2000, 8000, 1000, 4000, 10_000]).long()
@@ -249,6 +246,10 @@ def get_dataset(dataset, data_path, reduce_level=None, sampling_strategy="none",
                 reduce_level = torch.tensor([200, 300, 600, 50, 700, 1000, 50]).long()
     else:
         raise ValueError(f'Invalid dataset: {dataset}')
+    label_transform = lambda x:x
+    if one_hot:
+        label_transform = OneHotEncoding(num_classes)
+
     ds_test = CoolDataset(dataset+"_test", ds_test, im_size, num_classes, channel, transform, label_transform, class_names)
     ds_train = CoolDataset(dataset+"_train", ds_train, im_size, num_classes, channel, transform, label_transform, class_names, reduce_level, seed)
     return {

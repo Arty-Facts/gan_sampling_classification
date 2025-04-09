@@ -31,3 +31,4 @@ accelerate
 safetensors
 ood_detectors
 xformers
+mlxtend
