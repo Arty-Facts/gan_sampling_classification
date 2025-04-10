@@ -185,7 +185,7 @@ class DB_Logger:
             confusion_matrix = np.frombuffer(confusion_matrix, dtype=np.int32).reshape(numb_classes, numb_classes)
             yield  run_id, imgs, acc, f1, precision, recall, confusion_matrix
 
-    def get_img_statss(self, experiment_id, metric='f1'):
+    def get_stats(self, experiment_id, metric='f1'):
 
         cursor = self.conn.cursor()
         cursor.execute(
@@ -224,7 +224,7 @@ def plot_metric(db, experiment_ids, metric='f1', fig=None, ax=None, prefix=''):
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
     for experiment_id in experiment_ids:
-        imgs, means, stds, maxs, samples= db.get_img_statss(experiment_id, metric)
+        imgs, means, stds, maxs, samples= db.get_stats(experiment_id, metric)
         if len(imgs) == 0:
             continue
         name = db.get_experiment_name(experiment_id)
@@ -264,7 +264,7 @@ def plot_samples(db, experiment_ids, metric='f1', fig=None, ax=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
     for experiment_id in experiment_ids:
-        imgs, means, stds, maxs, samples= db.get_img_statss(experiment_id, metric)
+        imgs, means, stds, maxs, samples= db.get_stats(experiment_id, metric)
         if len(imgs) == 0:
             continue
         name = db.get_experiment_name(experiment_id)

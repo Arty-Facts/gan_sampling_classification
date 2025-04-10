@@ -287,8 +287,9 @@ def main(conf):
     # lrs = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, total_steps=((1000*kimg)//batch_size)+1)
     baseline_model.train()
     seen_img=0
-    eval_interval = kimg*10
-    next_eval = eval_interval
+    eval_interval = (np.concat([np.linspace(10000, 100_000, 10), np.linspace(110_000, 1_000_000, 40), np.linspace(1_100_000, 10_000_000, 40), np.linspace(11_000_000, 100_000_000, 100)])).astype(np.int32).tolist()
+    next_eval = eval_interval.pop(0)
+    results = []
     for img, l in train_loader:
         # print(img.shape, l.shape)
         img = data_transform(img.to(device))
@@ -306,8 +307,12 @@ def main(conf):
                 device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
-            next_eval += eval_interval
             torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
+            if len(results) > 20 and min(results[-20:]) > res['f1']: #no progress:
+                break
+
+            results.append(res['f1'])
+            next_eval = eval_interval.pop(0)
         if seen_img >= kimg*1000:
             break
         # lrs.step()
@@ -385,10 +390,10 @@ if __name__ == '__main__':
     import ops_utils 
 
     jobs = []
-    for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
+    for aug in [True, False]:
         for reduce_level in [1, 2, 3, None]:
-            for balanced in [True, False]:
-                for aug in [True, False]:
+            for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
+                for balanced in [True, False]:
                     jobs.append((main, {
                         'dataset': dataset,
                         'balanced': balanced,
@@ -400,7 +405,7 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 1.5
+    mem_req = 1.2
     max_per_gpu = 4
     if len(device_info) == 1: # we are on wood
         max_per_gpu = 32
@@ -413,7 +418,7 @@ if __name__ == '__main__':
     if len(gpu_nodes) == 0:
         raise ValueError('No available GPU nodes')
     jobs = jobs*3
-    random.shuffle(jobs)
+    # random.shuffle(jobs)
     print(f'Running {len(jobs)} jobs...')
     ops_utils.parallelize(runner, jobs, gpu_nodes, verbose=True, timeout=60*60*24*14)
         
