@@ -116,6 +116,10 @@ class DB_Logger:
             "DELETE FROM experiments WHERE id = ?",
             (experiment_id,)
         )
+        self.conn.execute(
+            "DELETE FROM assigned_runs WHERE id = ?",
+            (experiment_id,)
+        )
         self.conn.commit()
     
     def get_experiment_name(self, experiment_id):

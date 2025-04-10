@@ -172,6 +172,8 @@ def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None,
             reduce_level = torch.linspace(100, 1000, num_classes).long()
         elif reduce_level == 2:
             reduce_level = torch.linspace(10, 100, num_classes).long()
+        elif reduce_level == 3:
+            reduce_level = torch.linspace(10, 1000, num_classes).long()
     elif dataset == 'FashionMNIST':
         channel = 1
         im_size = 28
@@ -184,6 +186,8 @@ def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None,
             reduce_level = torch.linspace(100, 1000, num_classes).long()
         elif reduce_level == 2:
             reduce_level = torch.linspace(10, 100, num_classes).long()
+        elif reduce_level == 3:
+            reduce_level = torch.linspace(10, 1000, num_classes).long()
     elif dataset == 'SVHN':
         channel = 3
         im_size = 32
@@ -196,6 +200,8 @@ def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None,
             reduce_level = torch.linspace(100, 1000, num_classes).long()
         elif reduce_level == 2:
             reduce_level = torch.linspace(10, 100, num_classes).long()
+        elif reduce_level == 3:
+            reduce_level = torch.linspace(10, 1000, num_classes).long()
     elif dataset == 'CIFAR10':
         channel = 3
         im_size = 32
@@ -208,6 +214,8 @@ def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None,
             reduce_level = torch.linspace(100, 1000, num_classes).long()
         elif reduce_level == 2:
             reduce_level = torch.linspace(10, 100, num_classes).long()
+        elif reduce_level == 3:
+            reduce_level = torch.linspace(10, 1000, num_classes).long()
     elif dataset == 'CIFAR100':
         channel = 3
         im_size = 32
@@ -267,6 +275,19 @@ def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None,
                 reduce_level = torch.tensor([10, 30]).long()
             if dataset == 'DermaMNIST':
                 reduce_level = torch.tensor([20, 30, 60, 5, 70, 100, 5]).long()
+        elif reduce_level == 3:
+            if dataset == 'PathMNIST':
+                reduce_level = torch.tensor([300, 5000, 6000, 7000, 200, 8000, 100, 400, 10000]).long()
+            if dataset == 'BloodMNIST':
+                reduce_level = torch.tensor([20, 1500, 40, 1000, 10, 30, 2000, 800]).long()
+            if dataset == 'OrganCMNIST':
+                reduce_level = torch.tensor([700, 30, 10, 20, 60, 800, 1500, 40, 50, 900, 1000]).long()
+            if dataset == 'RetinaMNIST':
+                reduce_level = torch.tensor([400, 10, 200, 15, 5]).long()
+            if dataset == 'BreastMNIST':
+                reduce_level = torch.tensor([10, 300]).long()
+            if dataset == 'DermaMNIST':
+                reduce_level = torch.tensor([20, 30, 600, 5, 700, 1000, 5]).long()
     else:
         raise ValueError(f'Invalid dataset: {dataset}')
     label_transform = lambda x:x

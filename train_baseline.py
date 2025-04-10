@@ -213,14 +213,18 @@ def main(conf):
     aug = conf.get('aug', True)
 
     batch_size = conf.get('batch_size', 64)
-    lr = conf.get('lr', 1e-3)
+    lr = conf.get('lr', 5e-4)
     balanced = conf.get('balanced', True)
     reduce_level = conf.get('reduce_level', 1)
     root_dir = "/mnt/data/arty/data/gan_sampling/"
     data_dir = pathlib.Path(root_dir)/"data"
     data_dir.mkdir(exist_ok=True, parents=True)
     data_blob = ds.get_dataset(dataset, f"{root_dir}/data",reduce_level=reduce_level)
-    kimg = conf.get('kimg', (256*len(data_blob["train"]))//1000)
+    kimg = conf.get('kimg', 10_000)
+    # if reduce_level == 2:
+    #     kimg *= 10
+    # if reduce_level == 3:
+    #     kimg *= 2
     result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_b{balanced}_aug{aug}_{kimg}"
     result_dir = pathlib.Path(result_dir)
     result_dir.mkdir(exist_ok=True, parents=True)
@@ -280,10 +284,10 @@ def main(conf):
     loss_fn = torch.nn.CrossEntropyLoss()
     baseline_model = ResNet18_LowRes(num_classes=num_classes).to(device)
     optimizer = torch.optim.Adam(baseline_model.parameters(), lr=lr)
-    lrs = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, total_steps=((1000*kimg)//batch_size)+1)
+    # lrs = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, total_steps=((1000*kimg)//batch_size)+1)
     baseline_model.train()
     seen_img=0
-    eval_interval = kimg*100
+    eval_interval = kimg*10
     next_eval = eval_interval
     for img, l in train_loader:
         # print(img.shape, l.shape)
@@ -306,7 +310,7 @@ def main(conf):
             torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img:0>9}.pth")
         if seen_img >= kimg*1000:
             break
-        lrs.step()
+        # lrs.step()
     
     res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
     logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
@@ -382,7 +386,7 @@ if __name__ == '__main__':
 
     jobs = []
     for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
-        for reduce_level in [1,2, None]:
+        for reduce_level in [1, 2, 3, None]:
             for balanced in [True, False]:
                 for aug in [True, False]:
                     jobs.append((main, {
@@ -396,8 +400,10 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 2
+    mem_req = 1.5
     max_per_gpu = 4
+    if len(device_info) == 1: # we are on wood
+        max_per_gpu = 32
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
             use_gpu = int(gpu.mem.free/mem_req)
