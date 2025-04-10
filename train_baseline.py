@@ -307,14 +307,14 @@ def main(conf):
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
             next_eval += eval_interval
-            torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img:0>9}.pth")
+            torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
         if seen_img >= kimg*1000:
             break
         # lrs.step()
     
     res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
     logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
-    torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img:0>9}k.pth")
+    torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}k.pth")
                           
 
     # print("Results:")
