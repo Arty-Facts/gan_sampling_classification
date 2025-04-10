@@ -214,13 +214,12 @@ def main(conf):
     lr = conf.get('lr', 1e-3)
     balanced = conf.get('balanced', True)
     reduce_level = conf.get('reduce_level', 1)
-    # kimg = conf.get('kimg', (300*len(data_blob["train"]))//1000)
-    kimg = 1
+    kimg = conf.get('kimg', (256*len(data_blob["train"]))//1000)
     root_dir = "/mnt/data/arty/data/gan_sampling/"
-    result_dir = f"{root_dir}results/{dataset}reduce_level_{reduce_level}_balanced_{balanced}_aug_{aug}_{kimg}"
+    result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_b{balanced}_aug{aug}_{kimg}"
     result_dir = pathlib.Path(result_dir)
     result_dir.mkdir(exist_ok=True, parents=True)
-    data_dir = pathlib.Path(result_dir)/"data"
+    data_dir = pathlib.Path(root_dir)/"data"
     data_dir.mkdir(exist_ok=True, parents=True)
     data_blob = ds.get_dataset(dataset, f"{root_dir}/data",reduce_level=reduce_level)
     # encoder_name = conf.get('encoder', 'dinov2')
@@ -252,7 +251,7 @@ def main(conf):
     test_loader =  DataLoader(data_blob["test"], batch_size=batch_size, shuffle=False)
     num_classes = data_blob['num_classes']
     logger = db_logger.DB_Logger(f"{root_dir}/baseline.db")
-    exp_id = logger.register_experiment(f"{dataset}reduce_level_{reduce_level}_balanced_{balanced}_aug_{aug}", dataset=dataset, numb_classes=num_classes, seed=seed)
+    exp_id = logger.register_experiment(f"{dataset}_rlvl{reduce_level}_b{balanced}_aug_{aug}", dataset=dataset, numb_classes=num_classes, seed=seed)
     run_id = logger.get_next_run_id(exp_id)
     images = []
     for l in range(num_classes):
@@ -302,14 +301,14 @@ def main(conf):
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
             next_eval += eval_interval
-            torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img//1000}k.pth")
+            torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img:0>9}.pth")
         if seen_img >= kimg*1000:
             break
         lrs.step()
     
     res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
     logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
-    torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img//1000}k.pth")
+    torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img:0>9}k.pth")
                           
 
     # print("Results:")
@@ -390,12 +389,13 @@ if __name__ == '__main__':
                         'reduce_level': reduce_level,
                         'aug': aug,
                         }))
+
     device_info = di.Device()
 
 
     gpu_nodes = []
     mem_req = 2
-    max_per_gpu = 1
+    max_per_gpu = 11
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
             use_gpu = int(gpu.mem.free/mem_req)

@@ -49,16 +49,16 @@ system_dep:
     - unzip
 python_dep:
     file: ./requirements.txt
-tag: dcs_image
+tag: gan_sampling_classification
 remote:
   hosts:
     - name: nuke
-      workspace: ~/DCS
+      workspace: ~/gan_sampling_classification
     - name: dust
-      workspace: ~/DCS
+      workspace: ~/gan_sampling_classification
     - name: mirage
-      workspace: ~/DCS
+      workspace: ~/gan_sampling_classification
     - name: aztec
-      workspace: ~/DCS
+      workspace: ~/gan_sampling_classification
     - name: inferno 
-      workspace: ~/DCS
+      workspace: ~/gan_sampling_classification
