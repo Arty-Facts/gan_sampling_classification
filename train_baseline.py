@@ -308,7 +308,7 @@ def main(conf):
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
             torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
-            if len(results) > 20 and min(results[-20:]) > res['f1']: #no progress:
+            if len(results) > 50 and min(results[-20:]) > res['f1']: #no progress:
                 break
 
             results.append(res['f1'])
