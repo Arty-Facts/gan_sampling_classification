@@ -372,7 +372,7 @@ def main(conf):
 
 def runner(func, conf, device_id):
     curr_conf = deepcopy(conf)
-    curr_conf['rank'] = device_id 
+    curr_conf['device'] = device_id 
     return func(curr_conf)
 if __name__ == '__main__':
     import device_info as di
