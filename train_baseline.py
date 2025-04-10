@@ -394,8 +394,8 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 2
-    max_per_gpu = 11
+    mem_req = 3
+    max_per_gpu = 8
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
             use_gpu = int(gpu.mem.free/mem_req)
