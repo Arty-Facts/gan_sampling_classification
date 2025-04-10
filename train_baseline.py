@@ -144,12 +144,12 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     
     # Precision, Recall, F1-score (Per Class)
     precision, recall, f1, _ = precision_recall_fscore_support(true, pred, average=None)
-    macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(true, pred, average="micro")
+    macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(true, pred, average="macro")
     
     
     classes = range(len(precision))
     
-    print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}')
+    print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}, precision:{macro_precision}, recall:{macro_recall}')
     
     # Plot Confusion Matrix and Per-Class Metrics in a 6x1 Subplot
     fig, axes = plt.subplots(6, 1, figsize=(min(num_clasees, 20), min(6*num_clasees, 120)))
@@ -214,14 +214,14 @@ def main(conf):
     lr = conf.get('lr', 1e-3)
     balanced = conf.get('balanced', True)
     reduce_level = conf.get('reduce_level', 1)
-    kimg = conf.get('kimg', (256*len(data_blob["train"]))//1000)
     root_dir = "/mnt/data/arty/data/gan_sampling/"
-    result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_b{balanced}_aug{aug}_{kimg}"
-    result_dir = pathlib.Path(result_dir)
-    result_dir.mkdir(exist_ok=True, parents=True)
     data_dir = pathlib.Path(root_dir)/"data"
     data_dir.mkdir(exist_ok=True, parents=True)
     data_blob = ds.get_dataset(dataset, f"{root_dir}/data",reduce_level=reduce_level)
+    kimg = conf.get('kimg', (256*len(data_blob["train"]))//1000)
+    result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_b{balanced}_aug{aug}_{kimg}"
+    result_dir = pathlib.Path(result_dir)
+    result_dir.mkdir(exist_ok=True, parents=True)
     # encoder_name = conf.get('encoder', 'dinov2')
     # encoder = vision_ood.get_encoder(encoder_name)
     # embedding_size = 768
@@ -379,7 +379,7 @@ if __name__ == '__main__':
     import ops_utils 
 
     jobs = []
-    for dataset in ds.ALL_DATASETS:
+    for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
         for reduce_level in [1, None]:
             for balanced in [True, False]:
                 for aug in [True, False]:
@@ -394,7 +394,7 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 3
+    mem_req = 2
     max_per_gpu = 8
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
@@ -404,7 +404,8 @@ if __name__ == '__main__':
             gpu_nodes.extend([id]*use_gpu)
     if len(gpu_nodes) == 0:
         raise ValueError('No available GPU nodes')
-    random.shuffle(jobs)
+    # random.shuffle(jobs)
+    jobs = list(reversed(jobs))*3
     print(f'Running {len(jobs)} jobs...')
     ops_utils.parallelize(runner, jobs, gpu_nodes, verbose=True, timeout=60*60*24*14)
         
