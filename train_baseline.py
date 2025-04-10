@@ -187,8 +187,10 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
             ax.annotate(f'{p.get_height():.3f}', 
                         (p.get_x() + p.get_width() / 2., p.get_height()), 
                         ha='center', va='bottom', fontsize=10, color='black')
-    
-    plt.savefig(out_dir/f"metrics_{seen_img}.png")
+    try:
+        fig.savefig(out_dir/f"metrics_{seen_img}.png")
+    except Exception as e:
+        print(e)
     plt.close()
     
     return {
@@ -395,7 +397,7 @@ if __name__ == '__main__':
 
     gpu_nodes = []
     mem_req = 2
-    max_per_gpu = 8
+    max_per_gpu = 4
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
             use_gpu = int(gpu.mem.free/mem_req)
