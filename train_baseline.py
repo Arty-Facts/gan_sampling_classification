@@ -17,7 +17,9 @@ import ood_detectors.eval_utils as eval_utils
 import pathlib
 import datasets as ds
 from torch.utils.data import DataLoader
-
+import db_logger
+from copy import deepcopy
+import random
     
 class Composite(torch.nn.Module):
     def __init__(self, transforms):
@@ -138,18 +140,19 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     probas = np.concatenate(probas)
     
     # Accuracy
-    acc = np.sum(np.diag(conf_matrix)) / np.sum(conf_matrix)
+    acc = (np.sum(np.diag(conf_matrix)) / np.sum(conf_matrix)).item()
     
     # Precision, Recall, F1-score (Per Class)
     precision, recall, f1, _ = precision_recall_fscore_support(true, pred, average=None)
+    macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(true, pred, average="micro")
     
     
     classes = range(len(precision))
     
-    print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{f1.mean()}')
+    print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}')
     
     # Plot Confusion Matrix and Per-Class Metrics in a 6x1 Subplot
-    fig, axes = plt.subplots(6, 1, figsize=(2*num_clasees, 12*num_clasees))
+    fig, axes = plt.subplots(6, 1, figsize=(min(num_clasees, 20), min(6*num_clasees, 120)))
     # fig.suptitle("Confusion Matrix and Per-Class Evaluation Metrics")
     
     # Confusion Matrix
@@ -157,10 +160,12 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     axes[0].set_title("Confusion Matrix")
     
     # Per-Class Metrics
-    metrics = {"Accuracy": np.diag(conf_matrix) / conf_matrix.sum(axis=1), 
-            "F1-score": f1, 
-            "Precision": precision, 
-            "Recall": recall,}
+    metrics = [
+        ("Accuracy", np.diag(conf_matrix) / conf_matrix.sum(axis=1), acc), 
+        ("F1-score", f1, macro_f1), 
+        ("Precision", precision, macro_precision), 
+        ("Recall", recall, macro_recall),
+        ]
     sns.barplot(x=classes, y=train_lables, ax=axes[1])
     axes[1].set_xlabel("Class")
     axes[1].set_ylabel("Train Samples")
@@ -168,11 +173,11 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     axes[1].grid()
     fig.tight_layout()
     
-    for ax, (metric, values) in zip(axes[2:], metrics.items()):
+    for ax, (metric,values, macro) in zip(axes[2:], metrics):
         sns.barplot(x=classes, y=values, ax=ax)
         ax.set_xlabel("Class")
         ax.set_ylabel(metric)
-        ax.set_title(f"{metric} per Class, Mean: {values.mean():.3f}")
+        ax.set_title(f"{metric} per Class, Macro: {macro:.3f}")
         ax.grid()
         # ax.set_ylim(max(values.min()-0.01, 0), min(values.max()+0.01, 1))
         ax.set_ylim(0, 1)
@@ -188,7 +193,11 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     
     return {
         "valid_loss": valid_loss,
-        "accuracy": acc,
+        "acc": acc,
+        "f1": macro_f1,
+        "precision": macro_precision,
+        "recall": macro_recall,
+        "conf_matrix": conf_matrix,
         "precision_per_class": precision.tolist(),
         "recall_per_class": recall.tolist(),
         "f1_score_per_class": f1.tolist(),
@@ -198,16 +207,22 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
 def main(conf):
     dataset = conf.get('dataset', 'BloodMNIST')
     device = conf.get('device', 'cuda')
+    seed = conf.get('seed', None)
+    aug = conf.get('aug', True)
 
     batch_size = conf.get('batch_size', 64)
     lr = conf.get('lr', 1e-3)
     balanced = conf.get('balanced', True)
     reduce_level = conf.get('reduce_level', 1)
-    data_blob = ds.get_dataset(dataset, "data",reduce_level=reduce_level)
-    kimg = conf.get('kimg', (300*len(data_blob["train"]))//1000)
-    result_dir = f"reults/{dataset}reduce_level_{reduce_level}_balanced_{balanced}_{kimg}"
+    # kimg = conf.get('kimg', (300*len(data_blob["train"]))//1000)
+    kimg = 1
+    root_dir = "/mnt/data/arty/data/gan_sampling/"
+    result_dir = f"{root_dir}results/{dataset}reduce_level_{reduce_level}_balanced_{balanced}_aug_{aug}_{kimg}"
     result_dir = pathlib.Path(result_dir)
     result_dir.mkdir(exist_ok=True, parents=True)
+    data_dir = pathlib.Path(result_dir)/"data"
+    data_dir.mkdir(exist_ok=True, parents=True)
+    data_blob = ds.get_dataset(dataset, f"{root_dir}/data",reduce_level=reduce_level)
     # encoder_name = conf.get('encoder', 'dinov2')
     # encoder = vision_ood.get_encoder(encoder_name)
     # embedding_size = 768
@@ -223,7 +238,7 @@ def main(conf):
         transforms_v2.RGB(),
         # transforms_v2.RandomAutocontrast(),
         # transforms_v2.ColorJitter(),
-        transforms_v2.GaussianNoise(),
+        # transforms_v2.GaussianNoise(),
         transforms_v2.Normalize(mean=[.5], std=[.5]),
     ])
     val_data_transform = transforms.Compose([
@@ -231,10 +246,14 @@ def main(conf):
         transforms_v2.Normalize(mean=[.5], std=[.5])
     ])
 
-    
+    if not aug:
+        data_transform = val_data_transform
     train_loader = DataLoader(data_blob["train"], batch_sampler=ds.InfiniteClassSampler(data_blob["train"], batch_size=batch_size, balanced=balanced))
     test_loader =  DataLoader(data_blob["test"], batch_size=batch_size, shuffle=False)
     num_classes = data_blob['num_classes']
+    logger = db_logger.DB_Logger(f"{root_dir}/baseline.db")
+    exp_id = logger.register_experiment(f"{dataset}reduce_level_{reduce_level}_balanced_{balanced}_aug_{aug}", dataset=dataset, numb_classes=num_classes, seed=seed)
+    run_id = logger.get_next_run_id(exp_id)
     images = []
     for l in range(num_classes):
         for _ in range(10):
@@ -242,12 +261,9 @@ def main(conf):
             img, _ = data_blob["train"][index]
             images.append(data_transform(img)) 
             
-    grid = torchvision.utils.make_grid(images, nrow=num_classes, padding=1, normalize=True)
-    fig, ax = plt.subplots()
-    ax.imshow(grid.permute(1,2,0))
-    ax.axis('off') 
-    fig.tight_layout()
-    fig.savefig(result_dir/"train_images.png")
+    grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
+    image = torchvision.transforms.functional.to_pil_image(grid)
+    image.save(result_dir/"train_images.png")
 
     images = []
     for l in range(num_classes):
@@ -256,12 +272,9 @@ def main(conf):
             img, _ = data_blob["test"][index]
             images.append(val_data_transform(img)) 
             
-    grid = torchvision.utils.make_grid(images, nrow=num_classes, padding=1, normalize=True)
-    fig, ax = plt.subplots()
-    ax.imshow(grid.permute(1,2,0))
-    ax.axis('off') 
-    fig.tight_layout()
-    fig.savefig(result_dir/"test_images.png")
+    grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
+    image = torchvision.transforms.functional.to_pil_image(grid)
+    image.save(result_dir/"test_images.png")
 
     loss_fn = torch.nn.CrossEntropyLoss()
     baseline_model = ResNet18_LowRes(num_classes=num_classes).to(device)
@@ -283,17 +296,19 @@ def main(conf):
         optimizer.step()
         seen_img += img.shape[0]
         if seen_img >= next_eval:
-            result = evaluate_model(
+            res = evaluate_model(
                 baseline_model, test_loader, val_data_transform, loss_fn,
                 device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img
             )
+            logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
             next_eval += eval_interval
             torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img//1000}k.pth")
         if seen_img >= kimg*1000:
             break
         lrs.step()
     
-    result = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
+    res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
+    logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
     torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img//1000}k.pth")
                           
 
@@ -356,13 +371,40 @@ def main(conf):
     
 
 
+def runner(func, conf, device_id):
+    curr_conf = deepcopy(conf)
+    curr_conf['rank'] = device_id 
+    return func(curr_conf)
 if __name__ == '__main__':
+    import device_info as di
+    import ops_utils 
+
+    jobs = []
     for dataset in ds.ALL_DATASETS:
-        for reduce_level in [1]:
+        for reduce_level in [1, None]:
             for balanced in [True, False]:
-                main({
-                    'dataset':dataset,
-                    'balanced':balanced,
-                    'reduce_level':reduce_level,
-                    })
-    
+                for aug in [True, False]:
+                    jobs.append((main, {
+                        'dataset': dataset,
+                        'balanced': balanced,
+                        'reduce_level': reduce_level,
+                        'aug': aug,
+                        }))
+    device_info = di.Device()
+
+
+    gpu_nodes = []
+    mem_req = 2
+    max_per_gpu = 1
+    for id, gpu in enumerate(device_info):
+        if gpu.mem.free > mem_req:
+            use_gpu = int(gpu.mem.free/mem_req)
+            if use_gpu > max_per_gpu:
+                use_gpu = max_per_gpu
+            gpu_nodes.extend([id]*use_gpu)
+    if len(gpu_nodes) == 0:
+        raise ValueError('No available GPU nodes')
+    random.shuffle(jobs)
+    print(f'Running {len(jobs)} jobs...')
+    ops_utils.parallelize(runner, jobs, gpu_nodes, verbose=True, timeout=60*60*24*14)
+        
