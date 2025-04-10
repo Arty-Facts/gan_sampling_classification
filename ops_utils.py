@@ -60,7 +60,7 @@ def parallelize(func, jobs, gpu_nodes, verbose=True, timeout=60*60*24):
                     print(f'Launching job on cuda:{worker.node} in slot {worker.id}. {len(jobs)} jobs to left...')
                 if len(jobs) == 0:
                     break
-                args = list(jobs.pop())
+                args = list(jobs.pop(0))
                 args.append(worker.node)
                 p = mp.Process(target=func, args=args)
                 p.start()

@@ -382,7 +382,7 @@ if __name__ == '__main__':
 
     jobs = []
     for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
-        for reduce_level in [1, None]:
+        for reduce_level in [1,2, None]:
             for balanced in [True, False]:
                 for aug in [True, False]:
                     jobs.append((main, {
@@ -406,8 +406,8 @@ if __name__ == '__main__':
             gpu_nodes.extend([id]*use_gpu)
     if len(gpu_nodes) == 0:
         raise ValueError('No available GPU nodes')
-    # random.shuffle(jobs)
-    jobs = list(reversed(jobs))*3
+    jobs = jobs*3
+    random.shuffle(jobs)
     print(f'Running {len(jobs)} jobs...')
     ops_utils.parallelize(runner, jobs, gpu_nodes, verbose=True, timeout=60*60*24*14)
         
