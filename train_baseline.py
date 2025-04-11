@@ -267,8 +267,8 @@ def main(conf):
             images.append(data_transform(img)) 
             
     grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
-    image = torchvision.transforms.functional.to_pil_image(grid)
-    image.save(result_dir/"train_images.png")
+    train_image = torchvision.transforms.functional.to_pil_image(grid)
+    
 
     images = []
     for l in range(num_classes):
@@ -278,8 +278,12 @@ def main(conf):
             images.append(val_data_transform(img)) 
             
     grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
-    image = torchvision.transforms.functional.to_pil_image(grid)
-    image.save(result_dir/"test_images.png")
+    test_image = torchvision.transforms.functional.to_pil_image(grid)
+    try:
+        test_image.save(result_dir/"test_images.png")
+        train_image.save(result_dir/"train_images.png")
+    except Exception as e:
+        print(e)
 
     loss_fn = torch.nn.CrossEntropyLoss()
     baseline_model = ResNet18_LowRes(num_classes=num_classes).to(device)
@@ -307,7 +311,10 @@ def main(conf):
                 device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
-            torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
+            try:
+                torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
+            except Exception as e:
+                print(e)
             if len(results) > 50 and min(results[-20:]) > res['f1']: #no progress:
                 break
 
@@ -319,7 +326,10 @@ def main(conf):
     
     res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
     logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
-    torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}k.pth")
+    try:
+        torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
+    except Exception as e:
+        print(e)
                           
 
     # print("Results:")
