@@ -315,7 +315,7 @@ def main(conf):
                 torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
             except Exception as e:
                 print(e)
-            if len(results) > 50 and min(results[-20:]) > res['f1']: #no progress:
+            if len(results) > 50 and min(results[-20:]) > res['f1'] and max(results) > max(results[-20:]): #no progress:
                 break
 
             results.append(res['f1'])
