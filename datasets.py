@@ -159,7 +159,9 @@ class InfiniteClassSampler(Sampler):
     def __len__(self):
         return 2 ** 31  # practically infinite
 
-def get_dataset(dataset, data_path, reduce_level=None, one_hot=False, seed=None, **kvargs):
+def get_dataset(dataset, data_path, reduce_level=0, one_hot=False, seed=None, **kvargs):
+    if reduce_level == 0:
+        reduce_level = None
     if dataset == 'MNIST':
         channel = 1
         im_size = 28

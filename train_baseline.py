@@ -401,7 +401,7 @@ if __name__ == '__main__':
 
     jobs = []
     for aug in [True, False]:
-        for reduce_level in [1, 2, 3, None]:
+        for reduce_level in [1, 2, 3, 0]:
             for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
                 for balanced in [True, False]:
                     jobs.append((main, {
