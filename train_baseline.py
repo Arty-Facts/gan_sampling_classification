@@ -237,7 +237,7 @@ def main(conf):
 
     # preprocessing
     data_transform = transforms.Compose([
-        transforms_v2.RandomRotation(45),
+        # transforms_v2.RandomRotation(45),
         transforms_v2.RandomHorizontalFlip(),
         transforms_v2.RandomVerticalFlip(),
         transforms_v2.RGB(),
@@ -402,7 +402,7 @@ if __name__ == '__main__':
     jobs = []
     for aug in [True, False]:
         for reduce_level in [1, 2, 3, 0]:
-            for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
+            for dataset in ['OrganCMNIST',]:# ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
                 for balanced in [True, False]:
                     jobs.append((main, {
                         'dataset': dataset,
