@@ -58,7 +58,7 @@ remote:
       workspace: ~/gan_sampling_classification
     - name: mirage
       workspace: ~/gan_sampling_classification
-    - name: aztec
-      workspace: ~/gan_sampling_classification
-    - name: inferno 
-      workspace: ~/gan_sampling_classification
+    # - name: aztec
+    #   workspace: ~/gan_sampling_classification
+    # - name: inferno 
+    #   workspace: ~/gan_sampling_classification

@@ -237,9 +237,9 @@ def main(conf):
 
     # preprocessing
     data_transform = transforms.Compose([
-        # transforms_v2.RandomRotation(45),
+        transforms_v2.RandomRotation(16),
         transforms_v2.RandomHorizontalFlip(),
-        transforms_v2.RandomVerticalFlip(),
+        # transforms_v2.RandomVerticalFlip(),
         transforms_v2.RGB(),
         # transforms_v2.RandomAutocontrast(),
         # transforms_v2.ColorJitter(),
