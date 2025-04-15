@@ -411,7 +411,7 @@ if __name__ == '__main__':
     if len(gpu_nodes) == 0:
         raise ValueError('No available GPU nodes')
     jobs = jobs*3
-    # random.shuffle(jobs)
+    random.shuffle(jobs)
     print(f'Running {len(jobs)} jobs...')
     ops_utils.parallelize(runner, jobs, gpu_nodes, verbose=True, timeout=60*60*24*14)
         

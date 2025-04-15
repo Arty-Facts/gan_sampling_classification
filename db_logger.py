@@ -204,6 +204,27 @@ class DB_Logger:
         samples = [len(img_valuess[e]) for e in imgs]
         return imgs, means, stds, maxs, samples
         
+    def get_global_stats(self, experiment_id, metric='f1', ignore_img=100_000):
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            f"SELECT run_id, imgs, {metric} FROM results WHERE experiment_id = ? ORDER BY run_id",
+            (experiment_id,)
+        )
+        data = cursor.fetchall()
+        # Group values by imgs
+        run_id_valuess = {}
+        for run_id, imgs, value in data:
+            run_id_valuess.setdefault(run_id, []).append((imgs, value))
+        run_id_best = {}
+        for run_id, values in run_id_valuess.items():
+            values = sorted(values)
+            i, v = zip(*values)
+            if i[-1] < ignore_img:
+                continue
+            run_id_best[run_id] = np.max(v)
+        best_values = np.array(list(run_id_best.values()))
+        return best_values
 
     def close(self):
         """Close the SQLite database connection."""
