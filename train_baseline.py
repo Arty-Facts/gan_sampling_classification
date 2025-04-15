@@ -149,7 +149,7 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     
     classes = range(len(precision))
     
-    print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}, precision:{macro_precision}, recall:{macro_recall}')
+    # print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}, precision:{macro_precision}, recall:{macro_recall}')
     
     # Plot Confusion Matrix and Per-Class Metrics in a 6x1 Subplot
     fig, axes = plt.subplots(6, 1, figsize=(min(num_clasees, 20), min(6*num_clasees, 120)))
@@ -210,11 +210,11 @@ def main(conf):
     dataset = conf.get('dataset', 'BloodMNIST')
     device = conf.get('device', 'cuda')
     seed = conf.get('seed', None)
-    aug = conf.get('aug', True)
+    aug_level = conf.get('aug_level', 0)
 
     batch_size = conf.get('batch_size', 64)
     lr = conf.get('lr', 5e-4)
-    balanced = conf.get('balanced', True)
+    balanced_lvl = conf.get('balanced_lvl', 0)
     reduce_level = conf.get('reduce_level', 1)
     root_dir = "/mnt/data/arty/data/gan_sampling/"
     data_dir = pathlib.Path(root_dir)/"data"
@@ -225,7 +225,7 @@ def main(conf):
     #     kimg *= 10
     # if reduce_level == 3:
     #     kimg *= 2
-    result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_b{balanced}_aug{aug}_{kimg}"
+    result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_blvl{balanced_lvl}_alvl{aug_level}"
     result_dir = pathlib.Path(result_dir)
     result_dir.mkdir(exist_ok=True, parents=True)
     # encoder_name = conf.get('encoder', 'dinov2')
@@ -235,36 +235,19 @@ def main(conf):
     # encoder.to(device)
     # encoder_transform = get_encoder_transform(encoder, device=device)
 
-    # preprocessing
-    data_transform = transforms.Compose([
-        # transforms_v2.RandomRotation(16),
-        # transforms_v2.RandomHorizontalFlip(),
-        # transforms_v2.RandomVerticalFlip(),
-        transforms_v2.RGB(),
-        transforms_v2.RandomAutocontrast(),
-        transforms_v2.ColorJitter(),
-        transforms_v2.GaussianNoise(),
-        transforms_v2.Normalize(mean=[.5], std=[.5]),
-    ])
-    val_data_transform = transforms.Compose([
-        transforms_v2.RGB(),
-        transforms_v2.Normalize(mean=[.5], std=[.5])
-    ])
-
-    if not aug:
-        data_transform = val_data_transform
-    train_loader = DataLoader(data_blob["train"], batch_sampler=ds.InfiniteClassSampler(data_blob["train"], batch_size=batch_size, balanced=balanced))
+    train_transform, test_transform = ds.get_dataset_aug(dataset=dataset, aug_lvl=aug_level)
+    train_loader = DataLoader(data_blob["train"], batch_sampler=ds.InfiniteClassSampler(data_blob["train"], batch_size=batch_size, balanced_lvl=balanced_lvl))
     test_loader =  DataLoader(data_blob["test"], batch_size=batch_size, shuffle=False)
     num_classes = data_blob['num_classes']
     logger = db_logger.DB_Logger(f"{root_dir}/baseline.db")
-    exp_id = logger.register_experiment(f"{dataset}_rlvl{reduce_level}_b{balanced}_aug_{aug}", dataset=dataset, numb_classes=num_classes, seed=seed)
+    exp_id = logger.register_experiment(f"{dataset}_rlvl{reduce_level}_blvl{balanced_lvl}_alvl{aug_level}", dataset=dataset, numb_classes=num_classes, seed=seed)
     run_id = logger.get_next_run_id(exp_id)
     images = []
     for l in range(num_classes):
         for _ in range(10):
             index = data_blob["train"].get_random_index_for_label(l)
             img, _ = data_blob["train"][index]
-            images.append(data_transform(img)) 
+            images.append(train_transform(img)) 
             
     grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
     train_image = torchvision.transforms.functional.to_pil_image(grid)
@@ -275,7 +258,7 @@ def main(conf):
         for _ in range(10):
             index = data_blob["test"].get_random_index_for_label(l)
             img, _ = data_blob["test"][index]
-            images.append(val_data_transform(img)) 
+            images.append(test_transform(img)) 
             
     grid = torchvision.utils.make_grid(images, nrow=10, padding=1, normalize=True)
     test_image = torchvision.transforms.functional.to_pil_image(grid)
@@ -296,7 +279,7 @@ def main(conf):
     results = []
     for img, l in train_loader:
         # print(img.shape, l.shape)
-        img = data_transform(img.to(device))
+        img = train_transform(img.to(device))
         l = l.to(device)
         optimizer.zero_grad()
         out = baseline_model(img)
@@ -307,7 +290,7 @@ def main(conf):
         seen_img += img.shape[0]
         if seen_img >= next_eval:
             res = evaluate_model(
-                baseline_model, test_loader, val_data_transform, loss_fn,
+                baseline_model, test_loader, test_transform, loss_fn,
                 device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img
             )
             logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
@@ -324,7 +307,7 @@ def main(conf):
             break
         # lrs.step()
     
-    res = evaluate_model(baseline_model, test_loader, val_data_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
+    res = evaluate_model(baseline_model, test_loader, test_transform, loss_fn, device, result_dir, num_classes, data_blob["train"].data_per_class, seen_img) 
     logger.report_result(exp_id, run_id, seen_img, res['acc'], res['f1'], res['precision'], res['recall'], res['conf_matrix'])
     try:
         torch.save(baseline_model.state_dict(), result_dir/ f"model_{seen_img}.pth")
@@ -400,15 +383,15 @@ if __name__ == '__main__':
     import ops_utils 
 
     jobs = []
-    for aug in [True, False]:
+    for aug_level in [0, 1, 2, 3]:
         for reduce_level in [1, 2, 3, 0]:
-            for dataset in ['OrganCMNIST',]:# ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
-                for balanced in [True, False]:
+            for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
+                for balanced_lvl in [0, 1]:
                     jobs.append((main, {
                         'dataset': dataset,
-                        'balanced': balanced,
+                        'balanced_lvl': balanced_lvl,
                         'reduce_level': reduce_level,
-                        'aug': aug,
+                        'aug_level': aug_level,
                         }))
 
     device_info = di.Device()

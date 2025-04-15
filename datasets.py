@@ -8,6 +8,8 @@ import random
 import numpy as np
 from torch.utils.data import Sampler
 import math
+import torchvision.transforms.v2 as transforms_v2
+
 
 def seed_everything(seed=None):
     if seed is None:
@@ -106,10 +108,10 @@ class CoolDataset():
         return  f"{self.name} - " + ", ".join([f"{name}:{numb}" for name, numb in self.sorted_data_per_class])
     
 class InfiniteClassSampler(Sampler):
-    def __init__(self, dataset: CoolDataset, batch_size, balanced=True, seed=None):
+    def __init__(self, dataset: CoolDataset, batch_size, balanced_lvl=0, seed=None):
         self.dataset = dataset
         self.batch_size = batch_size
-        self.balanced = balanced
+        self.balanced_lvl = balanced_lvl
         self.num_classes = dataset.label_shape
         self.class_indices = dataset.indices_per_class
         self.data_per_class = dataset.data_per_class
@@ -119,7 +121,7 @@ class InfiniteClassSampler(Sampler):
 
     def __iter__(self):
         while True:
-            if not self.balanced:
+            if self.balanced_lvl == 0:
                 # Random shuffle of dataset indices
                 indices = torch.randperm(len(self.dataset))
                 for i in range(0, len(indices), self.batch_size):
@@ -127,7 +129,7 @@ class InfiniteClassSampler(Sampler):
                     if len(batch) < self.batch_size:
                         break
                     yield batch
-            else:
+            elif self.balanced_lvl == 1:
                 if self.batch_size > self.num_classes:
                     samples_per_class = self.batch_size // self.num_classes
                     for _ in range(len(self.dataset) // self.batch_size):  # can loop forever if needed
@@ -153,11 +155,75 @@ class InfiniteClassSampler(Sampler):
                         idx = torch.randint(0, len(class_idxs), (1,)) + sum([self.data_per_class[i] for i in range(label)])
                         batch.append(idx)
                     yield batch
+            else:
+                raise ValueError(f"unsuported balanced_lvl = {self.balanced_lvl}")
 
 
 
     def __len__(self):
         return 2 ** 31  # practically infinite
+    
+def get_dataset_aug(dataset, aug_lvl = 0):
+    Identity = lambda x:x
+    if dataset == 'BloodMNIST':
+        train_transform = transforms.Compose([
+            transforms_v2.RandomRotation(16)if aug_lvl == 1 else Identity,
+            transforms_v2.RandomHorizontalFlip()if aug_lvl == 1 else Identity,
+            transforms_v2.RandomVerticalFlip()if aug_lvl == 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2) if aug_lvl == 2 else Identity,
+            transforms_v2.GaussianNoise()if aug_lvl == 3 else Identity,
+            transforms_v2.GaussianBlur(3)if aug_lvl == 3 else Identity,
+            transforms_v2.Normalize(mean=[.5], std=[.5]),
+        ])
+        test_transform = transforms.Compose([
+            transforms_v2.Normalize(mean=[.5], std=[.5])
+        ])
+    elif dataset == 'OrganCMNIST':
+        train_transform = transforms.Compose([
+            transforms_v2.RandomRotation(16) if aug_lvl == 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.RGB(),
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.GaussianBlur(3)if aug_lvl == 3 else Identity,
+            transforms_v2.Normalize(mean=[.5], std=[.5]),
+        ])
+        test_transform = transforms.Compose([
+            transforms_v2.RGB(),
+            transforms_v2.Normalize(mean=[.5], std=[.5])
+        ])
+    elif dataset == 'BreastMNIST':
+        train_transform = transforms.Compose([
+            transforms_v2.RandomVerticalFlip() if aug_lvl == 1 else Identity,
+            transforms_v2.RandomHorizontalFlip() if aug_lvl == 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.RGB(),
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.GaussianBlur(3)if aug_lvl == 3 else Identity,
+            transforms_v2.Normalize(mean=[.5], std=[.5]),
+        ])
+        test_transform = transforms.Compose([
+            transforms_v2.RGB(),
+            transforms_v2.Normalize(mean=[.5], std=[.5])
+        ])
+    elif dataset == 'PathMNIST':
+        train_transform = transforms.Compose([
+            transforms_v2.RandomRotation(16) if aug_lvl == 1 else Identity,
+            transforms_v2.RandomHorizontalFlip() if aug_lvl == 1 else Identity,
+            transforms_v2.RandomVerticalFlip() if aug_lvl == 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.GaussianBlur(3)if aug_lvl == 3 else Identity,
+            transforms_v2.Normalize(mean=[.5], std=[.5]),
+        ])
+        test_transform = transforms.Compose([
+            transforms_v2.Normalize(mean=[.5], std=[.5])
+        ])
+    
+    return train_transform, test_transform
 
 def get_dataset(dataset, data_path, reduce_level=0, one_hot=False, seed=None, **kvargs):
     if reduce_level == 0:
