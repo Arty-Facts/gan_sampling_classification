@@ -205,7 +205,6 @@ class DB_Logger:
         return imgs, means, stds, maxs, samples
         
     def get_global_stats(self, experiment_id, metric='f1', ignore_img=100_000):
-
         cursor = self.conn.cursor()
         cursor.execute(
             f"SELECT run_id, imgs, {metric} FROM results WHERE experiment_id = ? ORDER BY run_id",

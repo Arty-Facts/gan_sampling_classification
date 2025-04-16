@@ -1,113 +1,18 @@
 import torch, torchvision
-import torchvision.transforms.v2 as transforms_v2
-import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
-from metrics.utils import frechet_inception_distance
 from models import ResNet18_LowRes
 import tqdm
 import seaborn as sns
 from mlxtend.plotting import plot_confusion_matrix
-from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
-from sklearn.decomposition import PCA
-import ood_detectors.vision as vision_ood
-import ood_detectors.likelihood as likelihood
-import ood_detectors.residual as residual
-import ood_detectors.eval_utils as eval_utils
+from sklearn.metrics import precision_recall_fscore_support
 import pathlib
 import datasets as ds
 from torch.utils.data import DataLoader
 import db_logger
 from copy import deepcopy
 import random
-    
-class Composite(torch.nn.Module):
-    def __init__(self, transforms):
-        super().__init__()
-        self.transforms = torch.nn.ModuleList(transforms)
 
-    def forward(self, img):
-        for t in self.transforms:
-            img = t(img)
-        return img
-    
-    def __repr__(self):
-        return f'Composite({self.transforms})'
-    
-def get_interpolation_mode(transform):
-    if isinstance(transform, transforms.Resize):
-        mode = ""
-        if transform.interpolation == transforms.InterpolationMode.BILINEAR:
-            mode = 'bilinear'
-        elif transform.interpolation == transforms.InterpolationMode.NEAREST:
-            mode = 'nearest'
-        elif transform.interpolation == transforms.InterpolationMode.BICUBIC:
-            mode = 'bicubic'
-        else:
-            raise ValueError(f'Invalid interpolation mode: {transform.interpolation}')
-        return mode
-    else:
-        raise ValueError(f'Invalid transform: {transform}')
-    
-def get_encoder_transform(model, device='cpu'):
-    layers = [transforms_v2.RGB()]
-    for t in model.transform.transforms:
-        if isinstance(t, transforms.Resize):
-            mode = get_interpolation_mode(t)
-            layers.append(torch.nn.Upsample(size=t.size, mode=mode))
-        elif isinstance(t, transforms.CenterCrop):
-            layers.append(t)
-        elif isinstance(t, transforms.Normalize):
-            layers.append(t)
-        else:
-            print(f'Warning: Ignoring transform {t}')
-    return Composite(layers).to(device)
-    
-def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
-    out_dir = pathlib.Path(out_dir)
-    out_dir.mkdir(exist_ok=True, parents=True)
-    if verbose:
-        print('Generating plots...')
-
-
-    # Create a figure with subplots
-    fig, ax = plt.subplots(1, 1, figsize=(15, 15))  # Adjust the size as needed
-    fig.suptitle(f'{tile} Evaluation')
-
-    def add_shadow(ax, data):
-        if data.var() > 1e-6:
-            l = ax.lines[-1]
-            x = l.get_xydata()[:,0]
-            y = l.get_xydata()[:,1]
-            ax.fill_between(x,y, alpha=0.1)
-            # Calculate and plot the mean
-            mean_value = np.mean(data)
-            line_color = l.get_color()
-            ax.axvline(mean_value, color=line_color, linestyle=':', linewidth=1.5)
-
-    if names is None:
-        it = enumerate(scores)
-    else:
-        it = zip(names, scores)
-    for index, score in it:
-        sns.kdeplot(data=score, bw_adjust=.2, ax=ax, label=f'{index}: auc: {eval_utils.auc(score, scores[0]):.2f}, mean: {np.mean(score):.2} s: {len(score)} ')
-        add_shadow(ax, score)
-
-    if extra is not None:
-        for name, value in extra:
-            ax.axvline(value, color='black', linestyle=':', linewidth=2.5)
-            ax.text(value, 0, name, rotation=90, verticalalignment='bottom', horizontalalignment='center')
-
-    ax.set_title('Density Plots')
-    ax.set_xlabel('bits/dim')
-    ax.set_ylabel('Density')
-
-    ax.legend()
-
-
-    # Save the figure
-    filename = f"{tile}.png"
-    plt.savefig(out_dir/filename, bbox_inches='tight')
 
 @torch.no_grad()
 def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num_clasees, train_lables, seen_img):
@@ -139,27 +44,19 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
     true = np.concatenate(true)
     probas = np.concatenate(probas)
     
-    # Accuracy
     acc = (np.sum(np.diag(conf_matrix)) / np.sum(conf_matrix)).item()
     
-    # Precision, Recall, F1-score (Per Class)
     precision, recall, f1, _ = precision_recall_fscore_support(true, pred, average=None)
     macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(true, pred, average="macro")
     
     
     classes = range(len(precision))
     
-    # print(f'{out_dir} valid loss: {valid_loss}, acc: {acc}, f1:{macro_f1}, precision:{macro_precision}, recall:{macro_recall}')
-    
-    # Plot Confusion Matrix and Per-Class Metrics in a 6x1 Subplot
     fig, axes = plt.subplots(6, 1, figsize=(min(num_clasees, 20), min(6*num_clasees, 120)))
-    # fig.suptitle("Confusion Matrix and Per-Class Evaluation Metrics")
     
-    # Confusion Matrix
     plot_confusion_matrix(conf_mat=conf_matrix, show_absolute=True, show_normed=True, colorbar=True, figure=fig, axis=axes[0])
     axes[0].set_title("Confusion Matrix")
     
-    # Per-Class Metrics
     metrics = [
         ("Accuracy", np.diag(conf_matrix) / conf_matrix.sum(axis=1), acc), 
         ("F1-score", f1, macro_f1), 
@@ -182,7 +79,6 @@ def evaluate_model(model, valid_loader, transform, loss_fn, device, out_dir, num
         # ax.set_ylim(max(values.min()-0.01, 0), min(values.max()+0.01, 1))
         ax.set_ylim(0, 1)
         
-        # Add value labels on bars
         for p in ax.patches:
             ax.annotate(f'{p.get_height():.3f}', 
                         (p.get_x() + p.get_width() / 2., p.get_height()), 
@@ -210,7 +106,7 @@ def main(conf):
     dataset = conf.get('dataset', 'BloodMNIST')
     device = conf.get('device', 'cuda')
     seed = conf.get('seed', None)
-    aug_level = conf.get('aug_level', 0)
+    aug_level = conf.get('aug_level', 1)
 
     batch_size = conf.get('batch_size', 64)
     lr = conf.get('lr', 5e-4)
@@ -221,19 +117,10 @@ def main(conf):
     data_dir.mkdir(exist_ok=True, parents=True)
     data_blob = ds.get_dataset(dataset, f"{root_dir}/data",reduce_level=reduce_level)
     kimg = conf.get('kimg', 10_000)
-    # if reduce_level == 2:
-    #     kimg *= 10
-    # if reduce_level == 3:
-    #     kimg *= 2
+
     result_dir = f"{root_dir}results/{dataset}_rlvl{reduce_level}_blvl{balanced_lvl}_alvl{aug_level}"
     result_dir = pathlib.Path(result_dir)
     result_dir.mkdir(exist_ok=True, parents=True)
-    # encoder_name = conf.get('encoder', 'dinov2')
-    # encoder = vision_ood.get_encoder(encoder_name)
-    # embedding_size = 768
-    # encoder.eval()
-    # encoder.to(device)
-    # encoder_transform = get_encoder_transform(encoder, device=device)
 
     train_transform, test_transform = ds.get_dataset_aug(dataset=dataset, aug_lvl=aug_level)
     train_loader = DataLoader(data_blob["train"], batch_sampler=ds.InfiniteClassSampler(data_blob["train"], batch_size=batch_size, balanced_lvl=balanced_lvl))
@@ -314,64 +201,6 @@ def main(conf):
     except Exception as e:
         print(e)
                           
-
-    # print("Results:")
-    # for name, score in result.items():
-    #     print(f"{name}: {score}")
-    # embs = {
-    #     "train": [[] for _ in range(num_classes)],
-    #     "test": [[] for _ in range(num_classes)],
-    # }
-            
-    # data = {
-    #     "train": [[] for _ in range(num_classes)],
-    #     "test": [[] for _ in range(num_classes)],
-    # }
-    # scores = {
-    #     "train": [[None]*num_classes for _ in range(num_classes)],
-    #     "test": [[None]*num_classes for _ in range(num_classes)],
-    # }
-    # for img, l in data_blob["train"]:
-    #     data["train"][l].append(img)
-
-    # for img, l in data_blob["test"]:
-    #     data["test"][l].append(img)
-
-    # print("Embed imgs")
-    # for name in ["train", "test"]:
-    #     for c, d in enumerate(data[name]):
-    #         loader = torch.utils.data.DataLoader(d, batch_size=16, shuffle=False)
-    #         with torch.no_grad():
-    #             for img in loader:
-    #                 img = encoder_transform(img.to(device))
-    #                 emb = encoder(img)
-    #                 embs[name][c].append(emb)
-    #         embs[name][c] = torch.concatenate(embs[name][c])
-
-
-    # print("fitt ood")
-    # ood_detectors = [residual.ResidualX(dims=(0.3, 0.5), k=3, subsample=0.8) for _ in range(num_classes)]
-
-    # ood_detector_name = ood_detectors[0].name
-    # for i, ood_detector in enumerate(ood_detectors):
-    #     ood_detector.to(device)
-    #     ood_detector.fit(embs["train"][i], batch_size=1000, n_epochs=10, verbose=False)
-    #     ood_detector.to("cpu")
-
-    # print("calc scores")
-    # for i, ood_detector in enumerate(ood_detectors):
-    #     for j in range(8):
-    #         ood_detector.to(device)
-    #         for name in ["train", "test"]:
-    #             score = ood_detector.predict(embs[name][j], batch_size=1000, verbose=False)
-    #             score = torch.from_numpy(score)
-    #             scores[name][i][j] = score
-    #         ood_detector.to("cpu")
-    # for i in range(num_classes):
-    #     scores_class = [scores[name][i][i].numpy() for name in scores.keys()] + [scores[name][i][j].numpy() for j in range(num_classes) if i != j]
-    #     names = [n for n in scores.keys()] + [f"test{j}" for j in range(num_classes) if i != j]
-    #     plot(scores_class,f"score_plot_{ood_detector_name}_{encoder_name}_{i}", out_dir=result_dir,names=names)
-    
 
 
 def runner(func, conf, device_id):
