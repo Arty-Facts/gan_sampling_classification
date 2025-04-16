@@ -212,7 +212,7 @@ if __name__ == '__main__':
     import ops_utils 
 
     jobs = []
-    for aug_level in [0, 1, 2, 3]:
+    for aug_level in [3]:
         for reduce_level in [1, 2, 3, 0]:
             for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
                 for balanced_lvl in [0, 1]:
