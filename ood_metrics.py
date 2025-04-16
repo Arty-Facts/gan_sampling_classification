@@ -16,7 +16,7 @@ import pathlib
 import datasets as ds
 import db_logger
 from copy import deepcopy
-import random
+import random, json
     
 class Composite(torch.nn.Module):
     def __init__(self, transforms):
@@ -59,10 +59,39 @@ def get_encoder_transform(model, device='cpu'):
         else:
             print(f'Warning: Ignoring transform {t}')
     return Composite(layers).to(device)
-    
+
+def save_ood(res, dataset, reduce_level, balanced_lvl, aug_level, encoder_name, size, prefix):
+    filename = f"ood_metric.jsonl"
+
+    data = {
+        "score": res,
+        "dataset": dataset,
+        "reduce_level": reduce_level,
+        "balanced_level": balanced_lvl,
+        "aug_level": aug_level,
+        "encoder": encoder_name,
+        "size": size,
+        "type": prefix,
+    }
+
+    with open(filename, 'a') as f:
+        json.dump(data, f)
+        f.write('\n')
+
+    print(f"Saved {len(res)} entries with metadata to {filename}")
+
+def load_ood(filename):
+    data = []
+    with open(filename, 'r') as f:
+        for line in f:
+            if line.strip():  # Skip empty lines
+                data.append(json.loads(line))
+    return data
+
 def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
     out_dir = pathlib.Path(out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
+    res = []
 
 
     # Create a figure with subplots
@@ -85,7 +114,10 @@ def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
     else:
         it = zip(names, scores)
     for index, score in it:
-        sns.kdeplot(data=score, bw_adjust=.2, ax=ax, label=f'{index}: auc: {eval_utils.auc(score, scores[0]):.2f}, mean: {np.mean(score):.2} s: {len(score)} ')
+        auc = eval_utils.auc(score, scores[0])
+        mean = np.mean(score).item()
+        res.append((index, auc, mean))
+        sns.kdeplot(data=score, bw_adjust=.2, ax=ax, label=f'{index}: auc: {auc:.2f}, mean: {mean:.2} s: {len(score)} ')
         add_shadow(ax, score)
 
     if extra is not None:
@@ -106,6 +138,7 @@ def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
         print('Generating plots...', out_dir/filename)
 
     plt.savefig(out_dir/filename, bbox_inches='tight')
+    return res
 
 def main(conf):
     dataset = conf.get('dataset', 'BloodMNIST')
@@ -135,7 +168,6 @@ def main(conf):
 
     train_transform, test_transform = ds.get_dataset_aug(dataset=dataset, aug_lvl=aug_level)
     train_transform.transforms.pop()
-    print(train_transform)
     num_classes = data_blob['num_classes']
 
     embs = {
@@ -197,11 +229,12 @@ def main(conf):
     for i in range(num_classes):
         scores_class = [scores[name][i][i].numpy() for name in scores.keys()] + [scores["test"][i][j].numpy() for j in range(num_classes) if i != j]
         names = [f"{n}{i}" for n in scores.keys()] + [f"test{j}" for j in range(num_classes) if i != j]
-        plot(scores_class,f"send_plot_{ood_detectors[i].name}_{encoder_name}_{i}_{size}_test", out_dir=result_dir,names=names)
-    
+        res = plot(scores_class,f"send_plot_{ood_detectors[i].name}_{encoder_name}_{i}_{size}_test", out_dir=result_dir,names=names)
+        save_ood(res, dataset, reduce_level, balanced_lvl, aug_level, encoder_name, size, "test")
         scores_class = [scores[name][i][i].numpy() for name in scores.keys()] + [scores["train"][i][j].numpy() for j in range(num_classes) if i != j]
         names = [f"{n}{i}" for n in scores.keys()] + [f"train{j}" for j in range(num_classes) if i != j]
-        plot(scores_class,f"score_plot_{ood_detectors[i].name}_{encoder_name}_{i}_{size}_train", out_dir=result_dir,names=names)
+        res = plot(scores_class,f"score_plot_{ood_detectors[i].name}_{encoder_name}_{i}_{size}_train", out_dir=result_dir,names=names)
+        save_ood(res, dataset, reduce_level, balanced_lvl, aug_level, encoder_name, size, "train")
     
 
 def runner(func, conf, device_id):
@@ -216,14 +249,14 @@ if __name__ == '__main__':
     import ops_utils 
 
     jobs = []
-    for aug_level in [0, 1, 2, 3]:
-        for reduce_level in [1, 2, 3, 0]:
+    for aug_level in [0, 1, 2]:
+        for reduce_level in [1, 2]:
             for dataset in ['BloodMNIST','PathMNIST','OrganCMNIST',]:#ds.ALL_DATASETS:
-                for balanced_lvl in [0, 1]:
+                for encoder in ["dinov2", "clip", "vit", "resnet50"]:
                     for size in [28, 224]:
                         jobs.append((main, {
                             'dataset': dataset,
-                            'balanced_lvl': balanced_lvl,
+                            'encoder': encoder,
                             'reduce_level': reduce_level,
                             'aug_level': aug_level,
                             'size': size,
@@ -233,10 +266,10 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 6
+    mem_req = 1.5
     max_per_gpu = 4
     if len(device_info) == 1: # we are on wood
-        max_per_gpu = 32
+        max_per_gpu = 8
     for id, gpu in enumerate(device_info):
         if gpu.mem.free > mem_req:
             use_gpu = int(gpu.mem.free/mem_req)
