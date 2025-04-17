@@ -88,15 +88,15 @@ def load_ood(filename):
                 data.append(json.loads(line))
     return data
 
-def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
+def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None, fig=None, ax=None, save=True):
     out_dir = pathlib.Path(out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
     res = []
 
-
-    # Create a figure with subplots
-    fig, ax = plt.subplots(1, 1, figsize=(15, 15))  # Adjust the size as needed
-    fig.suptitle(f'{tile} Evaluation')
+    if fig is None or ax is None:
+        # Create a figure with subplots
+        fig, ax = plt.subplots(1, 1, figsize=(15, 15))  # Adjust the size as needed
+        fig.suptitle(f'{tile} Evaluation')
 
     def add_shadow(ax, data):
         if data.var() > 1e-6:
@@ -136,8 +136,8 @@ def plot(scores, tile, out_dir='figs', verbose=True, names=None, extra=None):
     filename = f"{tile}.png"
     if verbose:
         print('Generating plots...', out_dir/filename)
-
-    plt.savefig(out_dir/filename, bbox_inches='tight')
+    if save:
+        plt.savefig(out_dir/filename, bbox_inches='tight')
     return res
 
 def main(conf):
@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
 
     gpu_nodes = []
-    mem_req = 1.5
+    mem_req = 6
     max_per_gpu = 4
     if len(device_info) == 1: # we are on wood
         max_per_gpu = 8

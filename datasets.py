@@ -167,12 +167,12 @@ def get_dataset_aug(dataset, aug_lvl = 0):
     Identity = lambda x:x
     if dataset == 'BloodMNIST':
         train_transform = transforms.Compose([
-            transforms_v2.RandomRotation(16)if aug_lvl == 1 else Identity,
-            transforms_v2.RandomHorizontalFlip()if aug_lvl == 1 else Identity,
-            transforms_v2.RandomVerticalFlip()if aug_lvl == 1 else Identity,
-            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
-            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2) if aug_lvl == 2 else Identity,
-            transforms_v2.GaussianNoise()if aug_lvl == 3 else Identity,
+            transforms_v2.RandomRotation(16)if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomHorizontalFlip()if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomVerticalFlip()if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl >= 2 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2) if aug_lvl >= 2 else Identity,
+            transforms_v2.GaussianNoise()if aug_lvl >= 3 else Identity,
             transforms_v2.Normalize(mean=[.5], std=[.5]),
         ])
         test_transform = transforms.Compose([
@@ -180,11 +180,11 @@ def get_dataset_aug(dataset, aug_lvl = 0):
         ])
     elif dataset == 'OrganCMNIST':
         train_transform = transforms.Compose([
-            transforms_v2.RandomRotation(16) if aug_lvl == 1 else Identity,
-            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.RandomRotation(16) if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl >= 2 else Identity,
             transforms_v2.RGB(),
-            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
-            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl >= 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl >= 3 else Identity,
             transforms_v2.Normalize(mean=[.5], std=[.5]),
         ])
         test_transform = transforms.Compose([
@@ -193,12 +193,12 @@ def get_dataset_aug(dataset, aug_lvl = 0):
         ])
     elif dataset == 'BreastMNIST':
         train_transform = transforms.Compose([
-            transforms_v2.RandomVerticalFlip() if aug_lvl == 1 else Identity,
-            transforms_v2.RandomHorizontalFlip() if aug_lvl == 1 else Identity,
-            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
+            transforms_v2.RandomVerticalFlip() if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomHorizontalFlip() if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl >= 2 else Identity,
             transforms_v2.RGB(),
-            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
-            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl >= 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl >= 3 else Identity,
             transforms_v2.Normalize(mean=[.5], std=[.5]),
         ])
         test_transform = transforms.Compose([
@@ -207,12 +207,12 @@ def get_dataset_aug(dataset, aug_lvl = 0):
         ])
     elif dataset == 'PathMNIST':
         train_transform = transforms.Compose([
-            transforms_v2.RandomRotation(16) if aug_lvl == 1 else Identity,
-            transforms_v2.RandomHorizontalFlip() if aug_lvl == 1 else Identity,
-            transforms_v2.RandomVerticalFlip() if aug_lvl == 1 else Identity,
-            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl == 2 else Identity,
-            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl == 1 else Identity,
-            transforms_v2.GaussianNoise() if aug_lvl == 3 else Identity,
+            transforms_v2.RandomRotation(16) if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomHorizontalFlip() if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomVerticalFlip() if aug_lvl >= 1 else Identity,
+            transforms_v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.95, 1.05))if aug_lvl >= 2 else Identity,
+            transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)  if aug_lvl >= 1 else Identity,
+            transforms_v2.GaussianNoise() if aug_lvl >= 3 else Identity,
             transforms_v2.Normalize(mean=[.5], std=[.5]),
         ])
         test_transform = transforms.Compose([
